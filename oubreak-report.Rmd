@@ -43,6 +43,10 @@ plot(inc_week_7, show_cases = TRUE, border = "black")
 ### Place
 
 
+### Person
+
+
+
 #### Single variable analysis
 
 ```{r, eval = TRUE}
@@ -103,9 +107,6 @@ knitr::kable(res)
 
 ```
 
-
-
-### Person
 
 
 

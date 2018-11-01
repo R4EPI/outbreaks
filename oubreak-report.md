@@ -42,18 +42,20 @@ plot(inc_week_7, show_cases = TRUE, border = "black")
 
 ### Place
 
+### Person
+
 #### Single variable analysis
 
 ``` r
 # Inspired by Daniel Gardiner
 # https://github.com/DanielGardiner/UsefulFunctions/blob/efffde624d424d977651ed1a9ee4430cbf2b0d6f/single.variable.analysis.v0.3.R#L12
+# just a quick prototype for RR
 
 outcome <- main_dataset$outcome == "Death"
 is_male <- main_dataset$gender == "m"
 is_child <- as.integer(main_dataset$age) <= 12
 
 univariate_analysis <- function (outcome, ...) {
-  # just a quick prototype for RR
   n <- length(outcome)
   predictors <- list(...)
   predictor_labels <- substitute(list(...))
@@ -110,5 +112,3 @@ knitr::kable(res)
 | :-------- | --: | ---------: | ------: | ----: | -----------: | --------: | --------: | --------: | -------: | --------: |
 | is\_male  |  56 |         22 |     0.4 |    46 |           34 |       0.7 | 0.9601518 | 0.7233926 | 1.274400 | 0.7785528 |
 | is\_child |  14 |          3 |     0.2 |    46 |           11 |       0.2 | 0.4046921 | 0.1227969 | 1.333712 | 0.1225535 |
-
-### Person
