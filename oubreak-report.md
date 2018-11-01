@@ -1,4 +1,4 @@
-outbreak report playground
+Outbreak report template
 ================
 
 ## Report
@@ -112,3 +112,52 @@ knitr::kable(res)
 | :-------- | --: | ---------: | ------: | ----: | -----------: | --------: | --------: | --------: | -------: | --------: |
 | is\_male  |  56 |         22 |     0.4 |    46 |           34 |       0.7 | 0.9601518 | 0.7233926 | 1.274400 | 0.7785528 |
 | is\_child |  14 |          3 |     0.2 |    46 |           11 |       0.2 | 0.4046921 | 0.1227969 | 1.333712 | 0.1225535 |
+
+#### Case Fatality Rate
+
+``` r
+case_fatality_rate <- function (deaths, population, conf_level = 0.95) {
+  res <- binom::binom.wilson(deaths, population, conf.level = conf_level)
+  res <- res[, c("x", "n", "mean", "lower", "upper")]
+  colnames(res) <- c("deaths", "population", "cfr", "lower", "upper")
+  res
+}
+
+known_status <- main_dataset[!is.na(main_dataset$outcome), ]
+deaths <- sum(known_status$outcome == "Death")
+population <- length(main_dataset$outcome)
+
+
+case_fatality_rate(deaths, population) %>% knitr::kable()
+```
+
+| deaths | population |       cfr |     lower |     upper |
+| -----: | ---------: | --------: | --------: | --------: |
+|     32 |        136 | 0.2352941 | 0.1718861 | 0.3132451 |
+
+CFR by region
+
+``` r
+group_by(known_status, province) %>%
+  do({
+    deaths <- sum(.$outcome == "Death")
+    population <- length(.$outcome)
+    case_fatality_rate(deaths, population)
+  }) %>%
+  arrange(desc(lower)) %>%
+  knitr::kable()
+```
+
+| province | deaths | population |       cfr |     lower |     upper |
+| :------- | -----: | ---------: | --------: | --------: | --------: |
+| Shanghai |     16 |         30 | 0.5333333 | 0.3614230 | 0.6976761 |
+| Zhejiang |      6 |         14 | 0.4285714 | 0.2138080 | 0.6740936 |
+| Anhui    |      2 |          3 | 0.6666667 | 0.2076596 | 0.9385081 |
+| Hebei    |      1 |          1 | 1.0000000 | 0.2065493 | 1.0000000 |
+| Jiangsu  |      4 |         14 | 0.2857143 | 0.1172138 | 0.5464908 |
+| Hunan    |      1 |          2 | 0.5000000 | 0.0945312 | 0.9054688 |
+| Henan    |      1 |          4 | 0.2500000 | 0.0455873 | 0.6993582 |
+| Jiangxi  |      1 |          4 | 0.2500000 | 0.0455873 | 0.6993582 |
+| Beijing  |      0 |          2 | 0.0000000 | 0.0000000 | 0.6576198 |
+| Fujian   |      0 |          3 | 0.0000000 | 0.0000000 | 0.5614970 |
+| Shandong |      0 |          2 | 0.0000000 | 0.0000000 | 0.6576198 |
