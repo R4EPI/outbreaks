@@ -141,4 +141,31 @@ group_by(known_status, province) %>%
 ```
 
 
+## CI Helper
 
+Just a prototype for the idea
+
+```{r}
+str_rate <- function(o, n, conf_level = 0.95, method = "wilson") {
+  stopifnot(length(method) == 1L, is.character(method))
+  stopifnot(length(conf_level) == 1L, is.numeric(conf_level))
+  stopifnot(length(o) == 1L, is.numeric(o), 0 <= o)
+  stopifnot(length(n) == 1L, is.numeric(n), o <= n)
+  res <- binom::binom.confint(
+    o, n,
+    conf.level = conf_level,
+    methods = method
+  )
+  # 71.30%; 95% CI 65.03-77.57%
+  percent <- scales::percent_format(accuracy = 0.01)
+  percent_wo_suffix <- scales::percent_format(accuracy = 0.01, suffix = "")
+  paste0(
+    percent(res$mean),
+    "; ", scales::percent(conf_level, accuracy = 1),
+    " CI ", percent_wo_suffix(res$lower), " ",  percent(res$upper)
+  )
+}
+res <- str_rate(1, 5)
+```
+
+The case fatality rate low (`r str_rate(1, 5)`).
