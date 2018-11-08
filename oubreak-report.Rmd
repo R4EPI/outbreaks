@@ -1,8 +1,10 @@
 ---
-title: "Outbreak report template"
+title: "Epidemiological description "
 author: ""
 date: ""
-output: github_document
+output:
+  github_document:
+    toc: true
 editor_options: 
   chunk_output_type: console
 ---
@@ -10,9 +12,8 @@ editor_options:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
+library(knitr)
 ```
-
-## Report
 
 This is a living document to gather functions and code snippets that eventually will evolve into an outbreak report template (+ package(s)).
 
@@ -22,30 +23,106 @@ main_dataset <- outbreaks::fluH7N9_china_2013
 ```
 
 
-### Time
+### Data preparation
 
 ```{r}
-library(incidence)
-inc_week_7 <- incidence(main_dataset$date_of_onset, interval = 7)
+main_dataset <- main_dataset %>% 
+  mutate(age = as.integer(age)) %>% 
+  mutate(age_group = cut(age, breaks = c(0, 5, 10, 30, 50, 80), right = FALSE))
 ```
-
-```{r}
-plot(inc_week_7)
-```
-
-```{r}
-inc_week_7 <- incidence(main_dataset$date_of_onset, 
-                        interval = 7, 
-                        groups = main_dataset$gender)
-plot(inc_week_7, show_cases = TRUE, border = "black")
-```
-
-
-### Place
 
 
 ### Person
 
+* [Who is affected: how many in total; male or female; young, adult or old? What are the links between affected people – work place, school, social gathering?  Is there a high rate of illness in contacts?  Is there a high rate of illness in health workers? You may want to include:  a bar chart showing case numbers or incidence by age group and sex; attack rates (AR); and numbers of deaths (in suspected and confirmed cases), mortality rates and/or case fatality ratio (CFR)]  
+
+#### By age group and sex
+
+Cases by sex
+
+```{r}
+main_dataset %>% 
+  group_by(gender) %>% 
+  summarise(cases = n()) %>% 
+  kable()
+```
+
+Cases by age group
+
+```{r}
+main_dataset %>% 
+  group_by(age_group) %>% 
+  summarise(cases = n()) %>% 
+  kable()
+```
+
+#### Case Fatality Rate
+
+The CFR is a proportion
+
+```{r}
+proportion <- function (x, n, conf_level = 0.95, multiplier = 1) {
+  res <- binom::binom.wilson(x, n, conf.level = conf_level)
+  res <- res[, c("x", "n", "mean", "lower", "upper")]
+  colnames(res) <- c("x", "n", "prop", "lower", "upper")
+  res$prop <- res$prop * multiplier
+  res$lower <- res$lower * multiplier
+  res$upper <- res$upper * multiplier
+  res
+}
+
+case_fatality_rate <- function (deaths, population, conf_level = 0.95) {
+  res <- proportion(deaths, population, conf_level = conf_level)
+  colnames(res) <- c("deaths", "population", "cfr", "lower", "upper")
+  res
+}
+
+known_status <- main_dataset[!is.na(main_dataset$outcome), ]
+deaths <- sum(known_status$outcome == "Death")
+population <- length(main_dataset$outcome)
+
+
+case_fatality_rate(deaths, population) %>% knitr::kable()
+```
+
+CFR by age group
+
+```{r}
+group_by(known_status, age_group) %>%
+  do({
+    deaths <- sum(.$outcome == "Death")
+    population <- length(.$outcome)
+    case_fatality_rate(deaths, population)
+  }) %>%
+  arrange(desc(lower)) %>%
+  knitr::kable()
+```
+
+
+#### Attack rates
+
+...
+
+#### Mortality
+
+```{r}
+mortality_rate <- function (deaths, population, 
+                            conf_level = 0.95, multiplier = 10^4) {
+  stopifnot(is.numeric(multiplier), length(multiplier) == 1L, multiplier > 0)
+  # as in here https://www.cdc.gov/ophss/csels/dsepd/ss1978/lesson3/section3.html
+  deaths / population * multiplier
+  res <- proportion(deaths, population, conf_level = conf_level, multiplier = multiplier)
+  est_label <- paste0("mortality per ", scales::number(multiplier))
+  colnames(res) <- c("deaths", "population", est_label, "lower", "upper")
+  res
+}
+```
+
+Mortality rate per 100,000:
+
+```{r}
+mortality_rate(deaths, population, multiplier = 10^4)
+```
 
 
 #### Single variable analysis
@@ -108,39 +185,6 @@ knitr::kable(res)
 
 ```
 
-#### Case Fatality Rate
-
-```{r}
-
-case_fatality_rate <- function (deaths, population, conf_level = 0.95) {
-  res <- binom::binom.wilson(deaths, population, conf.level = conf_level)
-  res <- res[, c("x", "n", "mean", "lower", "upper")]
-  colnames(res) <- c("deaths", "population", "cfr", "lower", "upper")
-  res
-}
-
-known_status <- main_dataset[!is.na(main_dataset$outcome), ]
-deaths <- sum(known_status$outcome == "Death")
-population <- length(main_dataset$outcome)
-
-
-case_fatality_rate(deaths, population) %>% knitr::kable()
-```
-
-CFR by region
-
-```{r}
-group_by(known_status, province) %>%
-  do({
-    deaths <- sum(.$outcome == "Death")
-    population <- length(.$outcome)
-    case_fatality_rate(deaths, population)
-  }) %>%
-  arrange(desc(lower)) %>%
-  knitr::kable()
-```
-
-
 ## CI Helper
 
 Just a prototype for the idea
@@ -168,4 +212,64 @@ str_rate <- function(o, n, conf_level = 0.95, method = "wilson") {
 res <- str_rate(1, 5)
 ```
 
-The case fatality rate low (`r str_rate(1, 5)`).
+The case fatality rate is low (`r str_rate(1, 5)`).
+
+
+### Time
+
+* [When did the cases fall ill? Are numbers increasing or stable? You may want to include an Epi curve (bar chart showing number of new (suspected and confirmed) cases each day/week) ]
+
+```{r}
+library(incidence)
+inc_week_7 <- incidence(main_dataset$date_of_onset, interval = 7)
+```
+
+```{r}
+plot(inc_week_7)
+```
+
+```{r}
+inc_week_7 <- incidence(main_dataset$date_of_onset, 
+                        interval = 7, 
+                        groups = main_dataset$gender)
+plot(inc_week_7, show_cases = TRUE, border = "black")
+```
+
+
+### Place
+
+*  [Across what area: one or several villages, all from same school, etc. You may want to include a map of the distribution of cases; attack rates by location]
+
+
+
+#### Base maps using open streetmap
+
+This is just an example to create an example base map based on open street map for Western Area Urban, Sierra Leone.
+We pull in all primary and secondary streets + houses. WIP
+
+```{r, message=FALSE}
+library(osmplotr)
+
+# A bounding box of Western Area Urban
+bbox <- osmdata::getbb("Western Area Urban")
+
+# get highways by type
+dat_highway_prim <- extract_osm_objects(key = "highway", value = "primary", bbox = bbox)
+Sys.sleep(3) # be nice to overpass API
+dat_highway_sec <- extract_osm_objects(key = "highway", value = "secondary", bbox = bbox)
+Sys.sleep(3) # be nice to overpass API
+dat_highway_tert <- extract_osm_objects(key = "highway", value = "tertiary", bbox = bbox)
+Sys.sleep(3) # be nice to overpass API
+dat_highway_res <- extract_osm_objects(key = "highway", value = "residential", bbox = bbox)
+    
+# now create the map
+# more important roads are darker
+map <- osm_basemap(bbox = bbox, bg = "white")
+map <- add_osm_objects(map, dat_highway_res, col = "gray90")
+map <- add_osm_objects(map, dat_highway_tert, col = "gray80")
+map <- add_osm_objects(map, dat_highway_sec, col = "gray60")
+map <- add_osm_objects(map, dat_highway_prim, col = "gray40")
+
+map
+```
+
