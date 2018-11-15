@@ -6,14 +6,14 @@ eventually will evolve into an outbreak report template (+ package(s)).
 
 ``` r
 # as a starting point
-main_dataset <- outbreaks::fluH7N9_china_2013
+main_linelist <- outbreaks::fluH7N9_china_2013
 ```
 
 ### Data preparation
 
 ``` r
-main_dataset <- main_dataset %>% 
-  mutate(age = as.integer(age)) %>% 
+main_linelist <- main_linelist %>%
+  mutate(age = as.integer(age)) %>%
   mutate(age_group = cut(age, breaks = c(0, 5, 10, 30, 50, 80), right = FALSE))
 ```
 
@@ -33,9 +33,9 @@ main_dataset <- main_dataset %>%
 Cases by sex
 
 ``` r
-main_dataset %>% 
-  group_by(gender) %>% 
-  summarise(cases = n()) %>% 
+main_linelist %>%
+  group_by(gender) %>%
+  summarise(cases = n()) %>%
   kable()
 ```
 
@@ -48,9 +48,9 @@ main_dataset %>%
 Cases by age group
 
 ``` r
-main_dataset %>% 
-  group_by(age_group) %>% 
-  summarise(cases = n()) %>% 
+main_linelist %>%
+  group_by(age_group) %>%
+  summarise(cases = n()) %>%
   kable()
 ```
 
@@ -61,6 +61,24 @@ main_dataset %>%
 | \[10,30)   |    46 |
 | \[30,50)   |    56 |
 | \[50,80)   |    21 |
+
+Age pyramid
+
+``` r
+by_age <- group_by(main_linelist, age_group, gender) %>%
+  filter(!is.na(gender)) %>%
+  summarise(n = n()) %>%
+  mutate(n = ifelse(gender == "m", -1, 1) * n)
+
+library(ggplot2)
+ggplot(by_age) +
+  aes(x = age_group, y = n, fill = gender) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  scale_y_continuous(limits = c(-40, 40), breaks = seq(-40, 40, 10), label = abs(seq(-40, 40, 10)))
+```
+
+![](oubreak-report_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
 
 #### Case Fatality Rate
 
@@ -83,9 +101,9 @@ case_fatality_rate <- function (deaths, population, conf_level = 0.95) {
   res
 }
 
-known_status <- main_dataset[!is.na(main_dataset$outcome), ]
+known_status <- main_linelist[!is.na(main_linelist$outcome), ]
 deaths <- sum(known_status$outcome == "Death")
-population <- length(main_dataset$outcome)
+population <- length(main_linelist$outcome)
 
 
 case_fatality_rate(deaths, population) %>% knitr::kable()
@@ -138,11 +156,13 @@ mortality_rate <- function (deaths, population,
 Mortality rate per 100,000:
 
 ``` r
-mortality_rate(deaths, population, multiplier = 10^4)
+mortality_rate(deaths, population, multiplier = 10^4) %>%
+  kable()
 ```
 
-    ##   deaths population mortality per 10 000    lower    upper
-    ## 1     32        136             2352.941 1718.861 3132.451
+| deaths | population | mortality per 10 000 |    lower |    upper |
+| -----: | ---------: | -------------------: | -------: | -------: |
+|     32 |        136 |             2352.941 | 1718.861 | 3132.451 |
 
 #### Single variable analysis
 
@@ -151,9 +171,9 @@ mortality_rate(deaths, population, multiplier = 10^4)
 # https://github.com/DanielGardiner/UsefulFunctions/blob/efffde624d424d977651ed1a9ee4430cbf2b0d6f/single.variable.analysis.v0.3.R#L12
 # just a quick prototype for RR
 
-outcome <- main_dataset$outcome == "Death"
-is_male <- main_dataset$gender == "m"
-is_child <- as.integer(main_dataset$age) <= 12
+outcome <- main_linelist$outcome == "Death"
+is_male <- main_linelist$gender == "m"
+is_child <- as.integer(main_linelist$age) <= 12
 
 univariate_analysis <- function (outcome, ...) {
   n <- length(outcome)
@@ -252,7 +272,7 @@ The case fatality rate is low (20.00%; 95% CI 3.62 62.45%).
 
 ``` r
 library(incidence)
-inc_week_7 <- incidence(main_dataset$date_of_onset, interval = 7)
+inc_week_7 <- incidence(main_linelist$date_of_onset, interval = 7)
 ```
 
     ## 10 missing observations were removed.
@@ -261,12 +281,12 @@ inc_week_7 <- incidence(main_dataset$date_of_onset, interval = 7)
 plot(inc_week_7)
 ```
 
-![](oubreak-report_files/figure-gfm/unnamed-chunk-12-1.png)<!-- -->
+![](oubreak-report_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
 
 ``` r
-inc_week_7 <- incidence(main_dataset$date_of_onset, 
+inc_week_7 <- incidence(main_linelist$date_of_onset, 
                         interval = 7, 
-                        groups = main_dataset$gender)
+                        groups = main_linelist$gender)
 ```
 
     ## 10 missing observations were removed.
@@ -275,13 +295,46 @@ inc_week_7 <- incidence(main_dataset$date_of_onset,
 plot(inc_week_7, show_cases = TRUE, border = "black")
 ```
 
-![](oubreak-report_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
+![](oubreak-report_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
 
 ### Place
 
   - \[Across what area: one or several villages, all from same school,
     etc. You may want to include a map of the distribution of cases;
     attack rates by location\]
+
+#### Mortality rate per district
+
+``` r
+population <- distinct(main_linelist, province)
+population$population <- as.integer(runif(nrow(population), min = 10^3, max = 10^5))
+main_linelist %>%
+  filter(!is.na(outcome)) %>%
+  group_by(province) %>%
+  do({
+    province <- as.character(.$province[1])
+    deaths <- sum(.$outcome == "Death")
+    pop <- population[population$province == province, "population"]
+    mortality_rate(deaths, pop, multiplier = 10^3)
+  }) %>%
+  mutate_if(is.numeric, funs(round(., digits = 2))) %>%
+  kable(col.names = c("Province", "Number of cases", "Population",
+                      "Incidence per 1000", "Lower 95% CI", "Upper 95% CI"))
+```
+
+| Province | Number of cases | Population | Incidence per 1000 | Lower 95% CI | Upper 95% CI |
+| :------- | --------------: | ---------: | -----------------: | -----------: | -----------: |
+| Anhui    |               2 |      89036 |               0.02 |         0.01 |         0.08 |
+| Beijing  |               0 |      56178 |               0.00 |         0.00 |         0.07 |
+| Fujian   |               0 |      64991 |               0.00 |         0.00 |         0.06 |
+| Hebei    |               1 |      25053 |               0.04 |         0.01 |         0.23 |
+| Henan    |               1 |      93663 |               0.01 |         0.00 |         0.06 |
+| Hunan    |               1 |      89638 |               0.01 |         0.00 |         0.06 |
+| Jiangsu  |               4 |      68968 |               0.06 |         0.02 |         0.15 |
+| Jiangxi  |               1 |      39754 |               0.03 |         0.00 |         0.14 |
+| Shandong |               0 |      84774 |               0.00 |         0.00 |         0.05 |
+| Shanghai |              16 |      77195 |               0.21 |         0.13 |         0.34 |
+| Zhejiang |               6 |       3421 |               1.75 |         0.80 |         3.82 |
 
 #### Base maps using open streetmap
 
@@ -314,5 +367,3 @@ map <- add_osm_objects(map, dat_highway_prim, col = "gray40")
 
 map
 ```
-
-![](oubreak-report_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
